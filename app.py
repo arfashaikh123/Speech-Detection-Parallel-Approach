@@ -1,6 +1,5 @@
 import streamlit as st
-import sounddevice as sd
-from scipy.io.wavfile import write
+from scipy.io.wavfile import write, read
 import speech_recognition as sr
 from transformers import pipeline
 import numpy as np
@@ -23,13 +22,7 @@ def load_models():
     except Exception as e:
         st.error(f"Error loading models: {e}")
         st.stop()
-
 def capture_audio(duration=DURATION, samplerate=SAMPLE_RATE):
-    st.info(f"Recording for {duration} seconds... Please speak clearly.")
-    recording = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype='float32')
-    sd.wait()
-    st.success("Recording complete.")
-    return recording.squeeze()
 
 def text_analysis(audio_data, text_classifier):
     try:
@@ -116,46 +109,49 @@ def main():
         unsafe_allow_html=True
     )
     st.markdown('<div class="main-title">🎤 Speech Emotion Detection <span style="font-size:1.5rem;">(Text & Audio)</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">This app records your voice, transcribes it, and predicts your emotion using both text and audio analysis.<br>Powered by <b>Hugging Face Transformers</b> and <b>Streamlit</b>.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Upload a WAV file to transcribe and predict your emotion using both text and audio analysis.<br>Powered by <b>Hugging Face Transformers</b> and <b>Streamlit</b>.</div>', unsafe_allow_html=True)
 
     with st.sidebar:
         st.image("https://cdn.pixabay.com/photo/2017/01/31/13/14/emoji-2025797_1280.png", width=120)
         st.markdown("""
         ## Instructions
-        1. Click **Record Audio**
-        2. Speak clearly for 5 seconds
-        3. Wait for the analysis results
-        4. See your detected emotion!
+        1. Upload a WAV file (16kHz, mono)
+        2. Wait for the analysis results
+        3. See your detected emotion!
         """)
         st.markdown("---")
         st.markdown("Made with ❤️ by Your Name")
 
     text_classifier, audio_classifier = load_models()
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🎙️ Record Audio", help="Click to record your voice"):
-        audio_data = capture_audio()
-        st.audio(np.int16(audio_data / np.max(np.abs(audio_data)) * 32767), format='audio/wav', sample_rate=SAMPLE_RATE)
-        text_scores = text_analysis(audio_data, text_classifier)
-        audio_scores = audio_analysis(audio_data, audio_classifier)
-        if not text_scores and not audio_scores:
-            st.error("Could not perform emotion analysis. Please check your microphone and try again.")
-            return
-        st.markdown('<div class="emotion-box"><b>Method 1: Text-based Analysis</b></div>', unsafe_allow_html=True)
-        if text_scores:
-            st.write({k: f"{v:.2f}" for k, v in sorted(text_scores.items(), key=lambda item: item[1], reverse=True)})
-        else:
-            st.write("Analysis failed.")
-        st.markdown('<div class="emotion-box"><b>Method 2: Audio-based Analysis</b></div>', unsafe_allow_html=True)
-        if audio_scores:
-            st.write({k: f"{v:.2f}" for k, v in sorted(audio_scores.items(), key=lambda item: item[1], reverse=True)})
-        else:
-            st.write("Analysis failed.")
-        combined_scores, final_emotion = combine_results(text_scores, audio_scores)
-        st.markdown('<div class="emotion-box"><b>Final Combined Outcome</b></div>', unsafe_allow_html=True)
-        st.success(f"Final Prediction: {final_emotion}")
-        st.write({k: f"{v:.2f}" for k, v in sorted(combined_scores.items(), key=lambda item: item[1], reverse=True)})
-        if os.path.exists("temp_audio.wav"):
-            os.remove("temp_audio.wav")
+    uploaded_file = st.file_uploader("Upload a WAV file", type=["wav"])
+    if uploaded_file is not None:
+        try:
+            SAMPLE_RATE, audio_data = read(uploaded_file)
+            if audio_data.dtype != np.float32:
+                audio_data = audio_data.astype(np.float32) / np.iinfo(audio_data.dtype).max
+            st.audio(uploaded_file, format='audio/wav', sample_rate=SAMPLE_RATE)
+            text_scores = text_analysis(audio_data, text_classifier)
+            audio_scores = audio_analysis(audio_data, audio_classifier)
+            if not text_scores and not audio_scores:
+                st.error("Could not perform emotion analysis. Please check your file and try again.")
+                return
+            st.markdown('<div class="emotion-box"><b>Method 1: Text-based Analysis</b></div>', unsafe_allow_html=True)
+            if text_scores:
+                st.write({k: f"{v:.2f}" for k, v in sorted(text_scores.items(), key=lambda item: item[1], reverse=True)})
+            else:
+                st.write("Analysis failed.")
+            st.markdown('<div class="emotion-box"><b>Method 2: Audio-based Analysis</b></div>', unsafe_allow_html=True)
+            if audio_scores:
+                st.write({k: f"{v:.2f}" for k, v in sorted(audio_scores.items(), key=lambda item: item[1], reverse=True)})
+            else:
+                st.write("Analysis failed.")
+            combined_scores, final_emotion = combine_results(text_scores, audio_scores)
+            st.markdown('<div class="emotion-box"><b>Final Combined Outcome</b></div>', unsafe_allow_html=True)
+            st.success(f"Final Prediction: {final_emotion}")
+            st.write({k: f"{v:.2f}" for k, v in sorted(combined_scores.items(), key=lambda item: item[1], reverse=True)})
+        except Exception as e:
+            st.error(f"Error processing file: {e}")
 
 if __name__ == "__main__":
     main()

@@ -1,8 +1,6 @@
 streamlit
-sounddevice
 scipy
 transformers
 torch
 SpeechRecognition
-pyaudio
 numpy
