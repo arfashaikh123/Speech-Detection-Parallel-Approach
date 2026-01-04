@@ -22,8 +22,6 @@ def load_models():
     except Exception as e:
         st.error(f"Error loading models: {e}")
         st.stop()
-def capture_audio(duration=DURATION, samplerate=SAMPLE_RATE):
-
 def text_analysis(audio_data, text_classifier):
     try:
         temp_wav_path = "temp_audio.wav"
